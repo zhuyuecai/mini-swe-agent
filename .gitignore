@@ -2,6 +2,7 @@
 uv.lock
 patch.txt
 exit_statuses*.yaml
+*.local.yaml
 preds.json
 *.traj.json
 .env
@@ -185,4 +186,3 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python
-
