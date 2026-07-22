@@ -4,7 +4,7 @@ agent:
   instance_template: |
     Please solve this issue: {{task}}
 
-    You can execute bash commands and edit files to implement the necessary changes.
+    You can execute bash commands, inspect repository structure with get_repo_knowledge, and edit files to implement the necessary changes.
 
     ## Recommended Workflow
 
@@ -35,7 +35,9 @@ agent:
     **CRITICAL REQUIREMENTS:**
 
     - Your response SHOULD include reasoning text explaining what you're doing
-    - Your response MUST include AT LEAST ONE bash tool call
+    - Your response MUST include AT LEAST ONE tool call
+    - Use get_repo_knowledge when you need a quick map of relevant files, functions, and code blocks before exact inspection.
+    - Use bash for exact file reads, edits, tests, and shell commands.
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
     - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
     - Submit your changes and finish your work by issuing the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`.
@@ -138,11 +140,14 @@ model:
 
     Here is general guidance on how to submit correct toolcalls:
 
-    Every response needs to use the 'bash' tool at least once to execute commands.
+    Every response needs to use at least one tool call.
 
     Call the bash tool with your command as the argument:
     - Tool: bash
     - Arguments: {"command": "your_command_here"}
+    Or call get_repo_knowledge to search repository symbols:
+    - Tool: get_repo_knowledge
+    - Arguments: {"query": "what you need to find", "max_results": 8}
 
     If you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
     without any other command.

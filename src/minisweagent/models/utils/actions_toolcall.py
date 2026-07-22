@@ -27,6 +27,39 @@ BASH_TOOL = {
 }
 
 
+GET_REPO_KNOWLEDGE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_repo_knowledge",
+        "description": "Search the current repository for relevant Python files, symbols, and code blocks.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language or code search query.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional repository-relative file or directory to search.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of matching code items to return.",
+                },
+                "include_code": {
+                    "type": "boolean",
+                    "description": "Whether to include source code snippets in the results.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
+TOOLS = [BASH_TOOL, GET_REPO_KNOWLEDGE_TOOL]
+
+
 def parse_toolcall_actions(
     tool_calls: list, *, format_error_template: str, template_kwargs: dict | None = None
 ) -> list[dict]:
@@ -54,14 +87,17 @@ def parse_toolcall_actions(
     for tool_call in tool_calls:
         error_msg = ""
         args = {}
+        name = tool_call.function.name
         try:
             args = json.loads(tool_call.function.arguments)
         except Exception as e:
             error_msg = f"Error parsing tool call arguments: {e}."
-        if tool_call.function.name != "bash":
-            error_msg += f"Unknown tool '{tool_call.function.name}'."
-        if not isinstance(args, dict) or "command" not in args:
+        if name == "bash" and (not isinstance(args, dict) or "command" not in args):
             error_msg += "Missing 'command' argument in bash tool call."
+        elif name == "get_repo_knowledge" and (not isinstance(args, dict) or "query" not in args):
+            error_msg += "Missing 'query' argument in get_repo_knowledge tool call."
+        elif name not in ["bash", "get_repo_knowledge"]:
+            error_msg += f"Unknown tool '{name}'."
         if error_msg:
             raise FormatError(
                 {
@@ -72,7 +108,19 @@ def parse_toolcall_actions(
                     "extra": {"interrupt_type": "FormatError"},
                 }
             )
-        actions.append({"command": args["command"], "tool_call_id": tool_call.id})
+        if name == "bash":
+            actions.append({"command": args["command"], "tool_call_id": tool_call.id})
+        else:
+            actions.append(
+                {
+                    "tool": "get_repo_knowledge",
+                    "query": args["query"],
+                    "path": args.get("path", ""),
+                    "max_results": args.get("max_results", 8),
+                    "include_code": args.get("include_code", True),
+                    "tool_call_id": tool_call.id,
+                }
+            )
     return actions
 
 

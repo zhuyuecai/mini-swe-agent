@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from minisweagent.exceptions import Submitted
+from minisweagent.tools.repo_knowledge import get_repo_knowledge_output
 from minisweagent.utils.serialize import recursive_merge
 
 
@@ -23,8 +24,10 @@ class LocalEnvironment:
 
     def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         """Execute a command in the local environment and return the result as a dict."""
-        command = action.get("command", "")
         cwd = cwd or self.config.cwd or os.getcwd()
+        if action.get("tool") == "get_repo_knowledge":
+            return get_repo_knowledge_output(cwd, action)
+        command = action.get("command", "")
         try:
             result = _run(command, cwd, os.environ | self.config.env, timeout or self.config.timeout)
             output = {"output": result.stdout, "returncode": result.returncode, "exception_info": ""}

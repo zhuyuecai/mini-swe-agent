@@ -1,3 +1,4 @@
+import json
 import os
 import shlex
 import signal
@@ -28,6 +29,28 @@ def test_local_environment_basic_execution():
     result = env.execute({"command": "echo 'hello world'"})
     assert result["returncode"] == 0
     assert "hello world" in result["output"]
+
+
+def test_local_environment_get_repo_knowledge_tool():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        Path(temp_dir, "sample.py").write_text(
+            "\n".join(
+                [
+                    "def parse_config(value):",
+                    "    if value:",
+                    "        return value.strip()",
+                    "    return ''",
+                ]
+            )
+        )
+        result = LocalEnvironment(cwd=temp_dir).execute(
+            {"tool": "get_repo_knowledge", "query": "parse config", "max_results": 1}
+        )
+        payload = json.loads(result["output"])
+        assert result["returncode"] == 0
+        assert result["extra"]["tool"] == "get_repo_knowledge"
+        assert payload["results"][0]["name"] == "parse_config"
+        assert payload["results"][0]["file"] == "sample.py"
 
 
 def test_local_environment_set_env_variables():

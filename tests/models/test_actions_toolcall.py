@@ -5,6 +5,8 @@ import pytest
 from minisweagent.exceptions import FormatError
 from minisweagent.models.utils.actions_toolcall import (
     BASH_TOOL,
+    GET_REPO_KNOWLEDGE_TOOL,
+    TOOLS,
     format_toolcall_observation_messages,
     parse_toolcall_actions,
 )
@@ -43,6 +45,22 @@ class TestParseToolcallActions:
         tool_call.id = "call_123"
         assert parse_toolcall_actions([tool_call], format_error_template="{{ error }}") == [
             {"command": "echo hello", "tool_call_id": "call_123"}
+        ]
+
+    def test_valid_get_repo_knowledge_tool_call(self):
+        tool_call = MagicMock()
+        tool_call.function.name = "get_repo_knowledge"
+        tool_call.function.arguments = '{"query": "config loading", "max_results": 3, "include_code": false}'
+        tool_call.id = "call_repo"
+        assert parse_toolcall_actions([tool_call], format_error_template="{{ error }}") == [
+            {
+                "tool": "get_repo_knowledge",
+                "query": "config loading",
+                "path": "",
+                "max_results": 3,
+                "include_code": False,
+                "tool_call_id": "call_repo",
+            }
         ]
 
     def test_multiple_valid_tool_calls(self):
@@ -84,6 +102,15 @@ class TestParseToolcallActions:
         with pytest.raises(FormatError) as exc_info:
             parse_toolcall_actions([tool_call], format_error_template="{{ error }}")
         assert "Missing 'command' argument" in exc_info.value.messages[0]["content"]
+
+    def test_missing_query_raises_format_error(self):
+        tool_call = MagicMock()
+        tool_call.function.name = "get_repo_knowledge"
+        tool_call.function.arguments = '{"path": "src"}'
+        tool_call.id = "call_1"
+        with pytest.raises(FormatError) as exc_info:
+            parse_toolcall_actions([tool_call], format_error_template="{{ error }}")
+        assert "Missing 'query' argument" in exc_info.value.messages[0]["content"]
 
 
 class TestFormatToolcallObservationMessages:
@@ -141,3 +168,7 @@ class TestBashTool:
         assert BASH_TOOL["function"]["name"] == "bash"
         assert "command" in BASH_TOOL["function"]["parameters"]["properties"]
         assert "command" in BASH_TOOL["function"]["parameters"]["required"]
+
+    def test_tools_include_repo_knowledge(self):
+        assert [tool["function"]["name"] for tool in TOOLS] == ["bash", "get_repo_knowledge"]
+        assert GET_REPO_KNOWLEDGE_TOOL["function"]["parameters"]["required"] == ["query"]
