@@ -8,10 +8,13 @@ from pydantic import BaseModel
 from minisweagent import package_dir
 from minisweagent.models.test_models import DeterministicModel, make_output
 from minisweagent.run.benchmarks.swebench import (
+    DATASET_MAPPING,
     filter_instances,
     get_sb_environment,
     get_swebench_docker_image_name,
+    load_swebench_instances,
     main,
+    process_instance,
     remove_from_preds_file,
     update_preds_file,
 )
@@ -102,6 +105,50 @@ def test_get_image_name_with_complex_instance_id():
     instance = {"instance_id": "project__sub__module__version__1.2.3"}
     expected = "docker.io/swebench/sweb.eval.x86_64.project_1776_sub_1776_module_1776_version_1776_1.2.3:latest"
     assert get_swebench_docker_image_name(instance) == expected
+
+
+def test_load_swebench_instances_uses_dataset_mapping():
+    with patch("datasets.load_dataset", return_value=[{"instance_id": "sample"}]) as mock_load_dataset:
+        assert load_swebench_instances("lite", "dev") == [{"instance_id": "sample"}]
+    mock_load_dataset.assert_called_once_with(DATASET_MAPPING["lite"], split="dev")
+
+
+def test_load_swebench_instances_uses_author_enriched_path():
+    with (
+        patch("datasets.load_from_disk", return_value=[{"instance_id": "sample", "pr_author": "alice"}]) as mock_load,
+        patch(
+            "minisweagent.run.utilities.author_enrich.enriched_dataset_path",
+            return_value="/tmp/princeton-nlp__SWE-Bench_Lite/dev/dataset",
+        ) as mock_path,
+    ):
+        assert load_swebench_instances("lite", "dev", author_enriched=True) == [
+            {"instance_id": "sample", "pr_author": "alice"}
+        ]
+    mock_path.assert_called_once_with("lite", "dev")
+    mock_load.assert_called_once_with("/tmp/princeton-nlp__SWE-Bench_Lite/dev/dataset")
+
+
+def test_process_instance_passes_pr_author_to_agent(tmp_path):
+    instance = {
+        "instance_id": "sample__repo-1",
+        "problem_statement": "fix the bug",
+        "pr_author": "alice",
+        "image_name": "image",
+    }
+    progress_manager = MagicMock()
+
+    with (
+        patch("minisweagent.run.benchmarks.swebench.get_model") as mock_get_model,
+        patch("minisweagent.run.benchmarks.swebench.get_sb_environment", return_value=object()),
+        patch("minisweagent.run.benchmarks.swebench.ProgressTrackingAgent") as mock_agent_class,
+    ):
+        mock_get_model.return_value.config.model_name = "model"
+        mock_agent = mock_agent_class.return_value
+        mock_agent.run.return_value = {"exit_status": "ok", "submission": "patch"}
+
+        process_instance(instance, tmp_path, {"agent": {}}, progress_manager)
+
+    mock_agent.run.assert_called_once_with("fix the bug", **instance)
 
 
 def test_get_sb_environment_runs_startup_command_as_dict():

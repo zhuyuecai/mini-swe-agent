@@ -2,6 +2,7 @@ import json
 import os
 import shlex
 import signal
+import subprocess
 import sys
 import tempfile
 import time
@@ -51,6 +52,32 @@ def test_local_environment_get_repo_knowledge_tool():
         assert result["extra"]["tool"] == "get_repo_knowledge"
         assert payload["results"][0]["name"] == "parse_config"
         assert payload["results"][0]["file"] == "sample.py"
+
+
+def test_local_environment_get_repo_knowledge_author_tool():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        subprocess.run(["git", "-C", temp_dir, "init"], check=True)
+        Path(temp_dir, "sample.py").write_text("def parse_config(value):\n    return value\n")
+        env = os.environ | {
+            "GIT_AUTHOR_NAME": "Alice Example",
+            "GIT_AUTHOR_EMAIL": "alice@example.com",
+            "GIT_COMMITTER_NAME": "Alice Example",
+            "GIT_COMMITTER_EMAIL": "alice@example.com",
+        }
+        subprocess.run(["git", "-C", temp_dir, "add", "."], check=True, env=env)
+        subprocess.run(["git", "-C", temp_dir, "commit", "-m", "add sample"], check=True, env=env)
+
+        result = LocalEnvironment(cwd=temp_dir).execute(
+            {
+                "tool": "get_repo_knowledge",
+                "query": "parse config",
+                "author": "alice@example.com",
+                "max_results": 1,
+            }
+        )
+        payload = json.loads(result["output"])
+        assert result["returncode"] == 0
+        assert payload["author_context"]["touched_files"][0]["file"] == "sample.py"
 
 
 def test_local_environment_set_env_variables():

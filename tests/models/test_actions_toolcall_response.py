@@ -14,7 +14,10 @@ def test_response_api_valid_get_repo_knowledge_tool_call():
                 "type": "function_call",
                 "call_id": "call_repo",
                 "name": "get_repo_knowledge",
-                "arguments": '{"query": "config loading", "path": "src", "include_code": false}',
+                "arguments": (
+                    '{"query": "config loading", "path": "src", "include_code": false, '
+                    '"author": "alice", "recent_contributions": 2, "include_author_content": false}'
+                ),
             }
         ],
         format_error_template="{{ error }}",
@@ -25,6 +28,9 @@ def test_response_api_valid_get_repo_knowledge_tool_call():
             "path": "src",
             "max_results": 8,
             "include_code": False,
+            "author": "alice",
+            "recent_contributions": 2,
+            "include_author_content": False,
             "tool_call_id": "call_repo",
         }
     ]

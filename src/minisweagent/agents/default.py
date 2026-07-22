@@ -7,9 +7,10 @@ import logging
 import time
 import traceback
 from pathlib import Path
+from typing import Any
 
 from jinja2 import StrictUndefined, Template
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from minisweagent import Environment, Model, __version__
 from minisweagent.exceptions import FormatError, InterruptAgentFlow, LimitsExceeded, TimeExceeded
@@ -33,6 +34,8 @@ class AgentConfig(BaseModel):
     """Exit after this many format errors in a row (0 = no limit)."""
     output_path: Path | None = None
     """Save the trajectory to this path."""
+    default_tool_args: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    """Default arguments to merge into model-visible tool calls, keyed by tool name."""
 
 
 class DefaultAgent:
@@ -151,8 +154,16 @@ class DefaultAgent:
 
     def execute_actions(self, message: dict) -> list[dict]:
         """Execute actions in message, add observation messages, return them."""
-        outputs = [self.env.execute(action) for action in message.get("extra", {}).get("actions", [])]
+        actions = [self._apply_default_tool_args(action) for action in message.get("extra", {}).get("actions", [])]
+        message.setdefault("extra", {})["actions"] = actions
+        outputs = [self.env.execute(action) for action in actions]
         return self.add_messages(*self.model.format_observation_messages(message, outputs, self.get_template_vars()))
+
+    def _apply_default_tool_args(self, action: dict) -> dict:
+        tool_name = action.get("tool", "bash" if "command" in action else "")
+        if not tool_name or tool_name not in self.config.default_tool_args:
+            return action
+        return recursive_merge(self.config.default_tool_args[tool_name], action)
 
     def serialize(self, *extra_dicts) -> dict:
         """Serialize agent state to a json-compatible nested dictionary for saving."""

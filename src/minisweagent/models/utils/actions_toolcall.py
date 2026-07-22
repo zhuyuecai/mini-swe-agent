@@ -51,6 +51,18 @@ GET_REPO_KNOWLEDGE_TOOL = {
                     "type": "boolean",
                     "description": "Whether to include source code snippets in the results.",
                 },
+                "author": {
+                    "type": "string",
+                    "description": "Optional git author name, email, or GitHub login to include recent author context.",
+                },
+                "recent_contributions": {
+                    "type": "integer",
+                    "description": "Number of recent commits by the author to inspect.",
+                },
+                "include_author_content": {
+                    "type": "boolean",
+                    "description": "Whether to include snippets from files touched by the author's recent commits.",
+                },
             },
             "required": ["query"],
         },
@@ -118,6 +130,9 @@ def parse_toolcall_actions(
                     "path": args.get("path", ""),
                     "max_results": args.get("max_results", 8),
                     "include_code": args.get("include_code", True),
+                    "author": args.get("author", ""),
+                    "recent_contributions": args.get("recent_contributions", 5),
+                    "include_author_content": args.get("include_author_content", True),
                     "tool_call_id": tool_call.id,
                 }
             )

@@ -113,6 +113,21 @@ def make_response_api_model(
     return DeterministicResponseAPIToolcallModel(outputs=outputs, **kwargs)
 
 
+class RecordingEnvironment:
+    def __init__(self):
+        self.actions = []
+
+    def execute(self, action: dict) -> dict:
+        self.actions.append(action)
+        return {"output": "ok", "returncode": 0, "exception_info": ""}
+
+    def get_template_vars(self, **kwargs) -> dict:
+        return kwargs
+
+    def serialize(self) -> dict:
+        return {}
+
+
 @pytest.fixture(params=["text", "toolcall", "response_api"])
 def model_factory(request, default_config, toolcall_config):
     """Parametrized fixture that returns (factory_fn, config) for all three model types."""
@@ -148,6 +163,65 @@ def test_successful_completion(model_factory):
     assert info["exit_status"] == "Submitted"
     assert info["submission"] == "Task completed successfully\n"
     assert agent.n_calls == 2
+
+
+def test_default_tool_args_are_applied(toolcall_config):
+    env = RecordingEnvironment()
+    agent = DefaultAgent(
+        model=make_text_model([("Search", [{"tool": "get_repo_knowledge", "query": "config"}])]),
+        env=env,
+        **{
+            **toolcall_config,
+            "default_tool_args": {
+                "get_repo_knowledge": {"recent_contributions": 10, "include_author_content": False}
+            },
+        },
+    )
+
+    agent.step()
+
+    assert env.actions == [
+        {
+            "tool": "get_repo_knowledge",
+            "query": "config",
+            "recent_contributions": 10,
+            "include_author_content": False,
+        }
+    ]
+    assert agent.messages[0]["extra"]["actions"] == env.actions
+
+
+def test_default_tool_args_do_not_override_model_args(toolcall_config):
+    env = RecordingEnvironment()
+    agent = DefaultAgent(
+        model=make_text_model(
+            [
+                (
+                    "Search",
+                    [
+                        {
+                            "tool": "get_repo_knowledge",
+                            "query": "config",
+                            "recent_contributions": 2,
+                            "include_author_content": True,
+                        }
+                    ],
+                )
+            ]
+        ),
+        env=env,
+        **{
+            **toolcall_config,
+            "default_tool_args": {
+                "get_repo_knowledge": {"recent_contributions": 10, "include_author_content": False}
+            },
+        },
+    )
+
+    agent.step()
+
+    assert env.actions[0]["recent_contributions"] == 2
+    assert env.actions[0]["include_author_content"] is True
 
 
 def test_step_limit_enforcement(model_factory):

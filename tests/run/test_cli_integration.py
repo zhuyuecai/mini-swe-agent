@@ -414,6 +414,7 @@ def test_mini_e_help():
     [
         ("config", ["config"]),
         ("inspect", ["inspect", "i", "inspector"]),
+        ("author-enrich", ["author-enrich"]),
         ("swebench", ["swebench"]),
         ("swebench-single", ["swebench-single"]),
     ],

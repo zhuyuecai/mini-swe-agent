@@ -2,6 +2,7 @@ import ast
 import json
 import re
 import shlex
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -66,17 +67,30 @@ def get_repo_knowledge(
     path: str = "",
     max_results: int = 8,
     include_code: bool = True,
+    author: str = "",
+    recent_contributions: int = 5,
+    include_author_content: bool = True,
 ) -> dict[str, Any]:
     root_path = Path(root).resolve()
     search_root = _resolve_search_root(root_path, path)
     nodes, relations = _build_index(root_path, search_root)
+    author_context = _author_context(
+        root_path,
+        search_root,
+        query=query,
+        author=author,
+        recent_contributions=recent_contributions,
+        include_author_content=include_author_content,
+        include_code=include_code,
+    )
+    author_files = {file["file"] for file in author_context.get("touched_files", [])}
     scored_nodes = sorted(
-        ((node, _score(node, query)) for node in nodes),
+        ((node, _score(node, query) + (4 if node.file in author_files else 0)) for node in nodes),
         key=lambda item: (-item[1], item[0].file, item[0].start_line),
     )
     results = [node.to_result(score=score, include_code=include_code) for node, score in scored_nodes[:max_results]]
     result_ids = {result["id"] for result in results}
-    return {
+    output = {
         "query": query,
         "root": str(root_path),
         "path": path,
@@ -88,6 +102,10 @@ def get_repo_knowledge(
             if relation.source in result_ids or relation.target in result_ids
         ],
     }
+    if author:
+        output["author"] = author
+        output["author_context"] = author_context
+    return output
 
 
 def get_repo_knowledge_output(root: str | Path, action: dict) -> dict[str, Any]:
@@ -100,6 +118,9 @@ def get_repo_knowledge_output(root: str | Path, action: dict) -> dict[str, Any]:
                     path=action.get("path", ""),
                     max_results=action.get("max_results", 8),
                     include_code=action.get("include_code", True),
+                    author=action.get("author", ""),
+                    recent_contributions=action.get("recent_contributions", 5),
+                    include_author_content=action.get("include_author_content", True),
                 ),
                 indent=2,
             ),
@@ -136,6 +157,111 @@ def _build_index(root: Path, search_root: Path) -> tuple[list[RepoKnowledgeNode]
         nodes.extend(file_nodes)
         relations.extend(_relations_from_nodes(file_nodes))
     return nodes, relations
+
+
+def _author_context(
+    root: Path,
+    search_root: Path,
+    *,
+    query: str,
+    author: str,
+    recent_contributions: int,
+    include_author_content: bool,
+    include_code: bool,
+) -> dict[str, Any]:
+    if not author:
+        return {}
+    commits = _recent_author_commits(root, author, recent_contributions)
+    touched_files = _touched_files(root, search_root, commits)
+    return {
+        "recent_contributions": len(commits),
+        "recent_commits": commits,
+        "touched_files": touched_files,
+        "content": _author_content(root, query, touched_files, include_code) if include_author_content else [],
+    }
+
+
+def _recent_author_commits(root: Path, author: str, limit: int) -> list[dict[str, Any]]:
+    output = _git(root, "log", f"--author={author}", "-n", str(max(limit, 0)), "--date=iso-strict", "--pretty=%H%x00%an%x00%ae%x00%ad%x00%s")
+    commits = []
+    for line in output.splitlines():
+        commit, name, email, date, subject = line.split("\0", 4)
+        files = _git(root, "show", "--name-only", "--format=", commit).splitlines()
+        commits.append(
+            {
+                "commit": commit,
+                "short_commit": commit[:12],
+                "author_name": name,
+                "author_email": email,
+                "date": date,
+                "subject": subject,
+                "files": [file for file in files if file],
+            }
+        )
+    return commits
+
+
+def _touched_files(root: Path, search_root: Path, commits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_file: dict[str, list[str]] = {}
+    for commit in commits:
+        for file in commit["files"]:
+            file_path = (root / file).resolve()
+            if _is_relative_to(file_path, search_root):
+                by_file.setdefault(file, []).append(commit["short_commit"])
+    return [
+        {"file": file, "commits": commits, "exists": (root / file).exists()}
+        for file, commits in sorted(by_file.items())
+    ]
+
+
+def _author_content(root: Path, query: str, touched_files: list[dict[str, Any]], include_code: bool) -> list[dict[str, Any]]:
+    content = []
+    for touched_file in touched_files:
+        file = root / touched_file["file"]
+        if not file.exists() or file.is_dir():
+            continue
+        if file.suffix == ".py":
+            nodes = sorted(_nodes_from_file(root, file), key=lambda node: (-_score(node, query), node.start_line))
+            if nodes:
+                content.append(nodes[0].to_result(score=_score(nodes[0], query), include_code=include_code))
+        elif _is_text_file(file):
+            text = file.read_text(encoding="utf-8", errors="replace")
+            item = {
+                "file": touched_file["file"],
+                "kind": "file",
+                "name": touched_file["file"],
+                "start_line": 1,
+                "end_line": len(text.splitlines()),
+                "summary": _summarize(text),
+            }
+            if include_code:
+                item["code"] = "\n".join(text.splitlines()[:120])
+            content.append(item)
+    return content[:10]
+
+
+def _git(root: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(root), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def _is_text_file(file: Path) -> bool:
+    return file.suffix.lower() in {".md", ".rst", ".txt", ".toml", ".yaml", ".yml", ".json"}
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
 
 
 def _iter_python_files(root: Path):
@@ -239,6 +365,7 @@ _DOCKER_SCRIPT = r'''
 import ast
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -328,6 +455,107 @@ def relations_from_nodes(nodes):
     return relations
 
 
+def run_git(root, *args):
+    result = subprocess.run(
+        ["git", "-C", str(root), *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def is_relative_to(path, parent):
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def is_text_file(file):
+    return file.suffix.lower() in {".md", ".rst", ".txt", ".toml", ".yaml", ".yml", ".json"}
+
+
+def recent_author_commits(root, author, limit):
+    output = run_git(root, "log", f"--author={author}", "-n", str(max(limit, 0)), "--date=iso-strict", "--pretty=%H%x00%an%x00%ae%x00%ad%x00%s")
+    commits = []
+    for line in output.splitlines():
+        commit, name, email, date, subject = line.split("\0", 4)
+        files = run_git(root, "show", "--name-only", "--format=", commit).splitlines()
+        commits.append({
+            "commit": commit,
+            "short_commit": commit[:12],
+            "author_name": name,
+            "author_email": email,
+            "date": date,
+            "subject": subject,
+            "files": [file for file in files if file],
+        })
+    return commits
+
+
+def touched_files(root, search_root, commits):
+    by_file = {}
+    for commit in commits:
+        for file in commit["files"]:
+            file_path = (root / file).resolve()
+            if is_relative_to(file_path, search_root):
+                by_file.setdefault(file, []).append(commit["short_commit"])
+    return [
+        {"file": file, "commits": commits, "exists": (root / file).exists()}
+        for file, commits in sorted(by_file.items())
+    ]
+
+
+def author_content(root, query, touched, include_code):
+    content = []
+    for item in touched:
+        file = root / item["file"]
+        if not file.exists() or file.is_dir():
+            continue
+        if file.suffix == ".py":
+            file_nodes = sorted(nodes_from_file(root, file), key=lambda node: (-score(node, query), node["start_line"]))
+            if file_nodes:
+                node = file_nodes[0]
+                result = {key: node[key] for key in ["id", "kind", "name", "file", "start_line", "end_line"]}
+                result["score"] = round(score(node, query), 3)
+                result["summary"] = summarize(node["content"])
+                if include_code:
+                    result["code"] = node["content"]
+                content.append(result)
+        elif is_text_file(file):
+            text = file.read_text(encoding="utf-8", errors="replace")
+            result = {
+                "file": item["file"],
+                "kind": "file",
+                "name": item["file"],
+                "start_line": 1,
+                "end_line": len(text.splitlines()),
+                "summary": summarize(text),
+            }
+            if include_code:
+                result["code"] = "\n".join(text.splitlines()[:120])
+            content.append(result)
+    return content[:10]
+
+
+def author_context(root, search_root, action):
+    if not action.get("author"):
+        return {}
+    commits = recent_author_commits(root, action["author"], action.get("recent_contributions", 5))
+    touched = touched_files(root, search_root, commits)
+    return {
+        "recent_contributions": len(commits),
+        "recent_commits": commits,
+        "touched_files": touched,
+        "content": author_content(root, action["query"], touched, action.get("include_code", True))
+        if action.get("include_author_content", True) else [],
+    }
+
+
 action = json.loads(sys.argv[1])
 root = Path.cwd().resolve()
 search_root = (root / action.get("path", "")).resolve() if action.get("path") else root
@@ -338,7 +566,12 @@ for file in iter_python_files(search_root):
     file_nodes = nodes_from_file(root, file)
     nodes.extend(file_nodes)
     relations.extend(relations_from_nodes(file_nodes))
-scored = sorted(((node, score(node, action["query"])) for node in nodes), key=lambda item: (-item[1], item[0]["file"], item[0]["start_line"]))
+context = author_context(root, search_root, action)
+author_files = {file["file"] for file in context.get("touched_files", [])}
+scored = sorted(
+    ((node, score(node, action["query"]) + (4 if node["file"] in author_files else 0)) for node in nodes),
+    key=lambda item: (-item[1], item[0]["file"], item[0]["start_line"]),
+)
 results = []
 for node, node_score in scored[:action.get("max_results", 8)]:
     result = {key: node[key] for key in ["id", "kind", "name", "file", "start_line", "end_line"]}
@@ -348,12 +581,16 @@ for node, node_score in scored[:action.get("max_results", 8)]:
         result["code"] = node["content"]
     results.append(result)
 result_ids = {result["id"] for result in results}
-print(json.dumps({
+payload = {
     "query": action["query"],
     "root": str(root),
     "path": action.get("path", ""),
     "result_count": len(results),
     "results": results,
     "relations": [relation for relation in relations if relation["from"] in result_ids or relation["to"] in result_ids],
-}, indent=2))
+}
+if action.get("author"):
+    payload["author"] = action["author"]
+    payload["author_context"] = context
+print(json.dumps(payload, indent=2))
 '''

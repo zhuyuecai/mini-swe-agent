@@ -7,6 +7,12 @@ agent:
     {{task}}
     </pr_description>
 
+    {% if pr_author is defined %}
+    <pr_author>
+    {{pr_author}}
+    </pr_author>
+
+    {% endif %}
     <instructions>
     # Task Instructions
 
@@ -54,6 +60,7 @@ agent:
     - Your response SHOULD include reasoning text explaining what you're doing
     - Your response MUST include AT LEAST ONE tool call. You can make MULTIPLE tool calls in a single response when they are independent (e.g., searching repository knowledge while reading a specific file).
     - Use get_repo_knowledge when you need a quick map of relevant files, functions, and code blocks before exact inspection.
+    - Pass pr_author as the author to get_repo_knowledge when the instance provides it and author-specific recent git history can reveal useful context.
     - Use bash for exact file reads, edits, tests, and shell commands.
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
     - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
@@ -113,6 +120,10 @@ agent:
     </instructions>
   step_limit: 250
   cost_limit: 3.
+  default_tool_args:
+    get_repo_knowledge:
+      recent_contributions: 5
+      include_author_content: true
 
 environment:
   cwd: "/testbed"

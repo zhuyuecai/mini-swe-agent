@@ -151,7 +151,7 @@ def process_instance(
             instance_id=instance_id,
             **config.get("agent", {}),
         )
-        info = agent.run(task)
+        info = agent.run(task, **instance)
         exit_status = info.get("exit_status")
         result = info.get("submission")
     except Exception as e:
@@ -197,6 +197,23 @@ def filter_instances(
     return instances
 
 
+def load_swebench_instances(subset: str, split: str, *, author_enriched: bool = False) -> list[dict]:
+    if author_enriched:
+        from datasets import load_from_disk
+
+        from minisweagent.run.utilities.author_enrich import enriched_dataset_path
+
+        dataset_path = enriched_dataset_path(subset, split)
+        logger.info(f"Loading author-enriched dataset from {dataset_path}...")
+        return list(load_from_disk(dataset_path))
+
+    from datasets import load_dataset
+
+    dataset_path = DATASET_MAPPING.get(subset, subset)
+    logger.info(f"Loading dataset {dataset_path}, split {split}...")
+    return list(load_dataset(dataset_path, split=split))
+
+
 # fmt: off
 @app.command(help=_HELP_TEXT)
 def main(
@@ -205,6 +222,7 @@ def main(
     slice_spec: str = typer.Option("", "--slice", help="Slice specification (e.g., '0:5' for first 5 instances)", rich_help_panel="Data selection"),
     filter_spec: str = typer.Option("", "--filter", help="Filter instance IDs by regex", rich_help_panel="Data selection"),
     shuffle: bool = typer.Option(False, "--shuffle", help="Shuffle instances", rich_help_panel="Data selection"),
+    author_enriched: bool = typer.Option(False, "--author-enriched", help="Load the dataset saved by mini-extra author-enrich", rich_help_panel="Data selection"),
     output: str = typer.Option("", "-o", "--output", help="Output directory", rich_help_panel="Basic"),
     workers: int = typer.Option(1, "-w", "--workers", help="Number of worker threads for parallel processing", rich_help_panel="Basic"),
     model: str | None = typer.Option(None, "-m", "--model", help="Model to use", rich_help_panel="Basic"),
@@ -219,11 +237,7 @@ def main(
     logger.info(f"Results will be saved to {output_path}")
     add_file_handler(output_path / "minisweagent.log")
 
-    from datasets import load_dataset
-
-    dataset_path = DATASET_MAPPING.get(subset, subset)
-    logger.info(f"Loading dataset {dataset_path}, split {split}...")
-    instances = list(load_dataset(dataset_path, split=split))
+    instances = load_swebench_instances(subset, split, author_enriched=author_enriched)
 
     instances = filter_instances(instances, filter_spec=filter_spec, slice_spec=slice_spec, shuffle=shuffle)
     if not redo_existing and (output_path / "preds.json").exists():

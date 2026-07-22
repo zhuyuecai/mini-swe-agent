@@ -50,7 +50,10 @@ class TestParseToolcallActions:
     def test_valid_get_repo_knowledge_tool_call(self):
         tool_call = MagicMock()
         tool_call.function.name = "get_repo_knowledge"
-        tool_call.function.arguments = '{"query": "config loading", "max_results": 3, "include_code": false}'
+        tool_call.function.arguments = (
+            '{"query": "config loading", "max_results": 3, "include_code": false, '
+            '"author": "alice", "recent_contributions": 2, "include_author_content": false}'
+        )
         tool_call.id = "call_repo"
         assert parse_toolcall_actions([tool_call], format_error_template="{{ error }}") == [
             {
@@ -59,6 +62,9 @@ class TestParseToolcallActions:
                 "path": "",
                 "max_results": 3,
                 "include_code": False,
+                "author": "alice",
+                "recent_contributions": 2,
+                "include_author_content": False,
                 "tool_call_id": "call_repo",
             }
         ]
@@ -172,3 +178,4 @@ class TestBashTool:
     def test_tools_include_repo_knowledge(self):
         assert [tool["function"]["name"] for tool in TOOLS] == ["bash", "get_repo_knowledge"]
         assert GET_REPO_KNOWLEDGE_TOOL["function"]["parameters"]["required"] == ["query"]
+        assert "author" in GET_REPO_KNOWLEDGE_TOOL["function"]["parameters"]["properties"]
