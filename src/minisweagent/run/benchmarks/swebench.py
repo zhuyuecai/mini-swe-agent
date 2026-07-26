@@ -7,10 +7,12 @@ import concurrent.futures
 import json
 import random
 import re
+import subprocess
 import threading
 import time
 import traceback
 from pathlib import Path
+from typing import Literal
 
 import typer
 from jinja2 import StrictUndefined, Template
@@ -63,6 +65,7 @@ DATASET_MAPPING = {
 
 app = typer.Typer(rich_markup_mode="rich", add_completion=False)
 _OUTPUT_FILE_LOCK = threading.Lock()
+CacheLevel = Literal["none", "base", "env", "instance"]
 
 
 def get_swebench_docker_image_name(instance: dict) -> str:
@@ -92,6 +95,27 @@ def get_sb_environment(config: dict, instance: dict) -> Environment:
         if out["returncode"] != 0:
             raise RuntimeError(f"Error executing startup command: {out}")
     return env
+
+
+def cleanup_swebench_image(config: dict, instance: dict, cache_level: CacheLevel) -> None:
+    """Remove per-instance Docker images above the selected cache level.
+
+    mini-SWE-agent uses prebuilt SWE-bench instance images directly, so only
+    ``instance`` can keep those images locally. Lower levels remove them after use.
+    """
+    if cache_level == "instance":
+        return
+    env_config = config.get("environment", {})
+    if env_config.get("environment_class", "docker") != "docker":
+        return
+    image_name = get_swebench_docker_image_name(instance)
+    logger.info(f"Removing SWE-bench instance image {image_name} for cache_level={cache_level}")
+    subprocess.run(
+        [env_config.get("executable", "docker"), "image", "rm", "-f", image_name],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
 
 
 def update_preds_file(output_path: Path, instance_id: str, model_name: str, result: str):
@@ -124,6 +148,7 @@ def process_instance(
     output_dir: Path,
     config: dict,
     progress_manager: RunBatchProgressManager,
+    cache_level: CacheLevel = "instance",
 ) -> None:
     """Process a single SWEBench instance."""
     instance_id = instance["instance_id"]
@@ -138,6 +163,7 @@ def process_instance(
     progress_manager.update_instance_status(instance_id, "Pulling/starting environment")
 
     agent = None
+    env = None
     exit_status = None
     result = None
     extra_info = {}
@@ -175,6 +201,9 @@ def process_instance(
             logger.info(f"Saved trajectory to '{traj_path}'")
         update_preds_file(output_dir / "preds.json", instance_id, model.config.model_name, result)
         progress_manager.on_instance_end(instance_id, exit_status)
+        if env is not None and (cleanup := getattr(env, "cleanup", None)):
+            cleanup()
+        cleanup_swebench_image(config, instance, cache_level)
 
 
 def filter_instances(
@@ -223,6 +252,7 @@ def main(
     filter_spec: str = typer.Option("", "--filter", help="Filter instance IDs by regex", rich_help_panel="Data selection"),
     shuffle: bool = typer.Option(False, "--shuffle", help="Shuffle instances", rich_help_panel="Data selection"),
     author_enriched: bool = typer.Option(False, "--author-enriched", help="Load the dataset saved by mini-extra author-enrich", rich_help_panel="Data selection"),
+    cache_level: CacheLevel = typer.Option("env", "--cache-level", "--cache_level", help="SWE-bench image cache level: none/base/env remove per-instance images after use, instance keeps them", rich_help_panel="Data selection"),
     output: str = typer.Option("", "-o", "--output", help="Output directory", rich_help_panel="Basic"),
     workers: int = typer.Option(1, "-w", "--workers", help="Number of worker threads for parallel processing", rich_help_panel="Basic"),
     model: str | None = typer.Option(None, "-m", "--model", help="Model to use", rich_help_panel="Basic"),
@@ -270,7 +300,7 @@ def main(
     with Live(progress_manager.render_group, refresh_per_second=4):
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(process_instance, instance, output_path, config, progress_manager): instance[
+                executor.submit(process_instance, instance, output_path, config, progress_manager, cache_level): instance[
                     "instance_id"
                 ]
                 for instance in instances

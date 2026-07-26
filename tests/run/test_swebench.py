@@ -9,6 +9,7 @@ from minisweagent import package_dir
 from minisweagent.models.test_models import DeterministicModel, make_output
 from minisweagent.run.benchmarks.swebench import (
     DATASET_MAPPING,
+    cleanup_swebench_image,
     filter_instances,
     get_sb_environment,
     get_swebench_docker_image_name,
@@ -149,6 +150,34 @@ def test_process_instance_passes_pr_author_to_agent(tmp_path):
         process_instance(instance, tmp_path, {"agent": {}}, progress_manager)
 
     mock_agent.run.assert_called_once_with("fix the bug", **instance)
+
+
+def test_cleanup_swebench_image_removes_docker_instance_image():
+    instance = {"instance_id": "sample__repo-1", "image_name": "custom/image:tag"}
+    with patch("minisweagent.run.benchmarks.swebench.subprocess.run") as mock_run:
+        cleanup_swebench_image({"environment": {"environment_class": "docker"}}, instance, "env")
+    mock_run.assert_called_once_with(
+        ["docker", "image", "rm", "-f", "custom/image:tag"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def test_cleanup_swebench_image_keeps_instance_cache_level():
+    with patch("minisweagent.run.benchmarks.swebench.subprocess.run") as mock_run:
+        cleanup_swebench_image({}, {"instance_id": "sample__repo-1", "image_name": "custom/image:tag"}, "instance")
+    mock_run.assert_not_called()
+
+
+def test_cleanup_swebench_image_skips_non_docker_environment():
+    with patch("minisweagent.run.benchmarks.swebench.subprocess.run") as mock_run:
+        cleanup_swebench_image(
+            {"environment": {"environment_class": "singularity"}},
+            {"instance_id": "sample__repo-1", "image_name": "custom/image:tag"},
+            "env",
+        )
+    mock_run.assert_not_called()
 
 
 def test_get_sb_environment_runs_startup_command_as_dict():
