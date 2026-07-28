@@ -1,0 +1,12 @@
+model:
+  model_class: "litellm"
+  model_name: "nebius/Qwen/Qwen3-Next-80B-A3B-Thinking"
+  cost_tracking: "ignore_errors"
+  model_kwargs:
+    drop_params: false
+    temperature: 0.6
+    top_p: 0.95
+    top_k: 20
+    max_tokens: 10000
+    timeout: 120
+    num_retries: 1
