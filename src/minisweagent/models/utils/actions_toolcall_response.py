@@ -53,7 +53,26 @@ GET_REPO_KNOWLEDGE_TOOL_RESPONSE_API = {
     },
 }
 
-TOOLS_RESPONSE_API = [BASH_TOOL_RESPONSE_API, GET_REPO_KNOWLEDGE_TOOL_RESPONSE_API]
+GET_DEVELOPER_SKILL_TOOL_RESPONSE_API = {
+    "type": "function",
+    "name": "get_developer_skill",
+    "description": (
+        "Build a JSON skill profile for a developer from their previous git commits, changed files, "
+        "ownership areas, and coding style signals."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "developer": {
+                "type": "string",
+                "description": "Developer GitHub account name, git author name, or email address.",
+            }
+        },
+        "required": ["developer"],
+    },
+}
+
+TOOLS_RESPONSE_API = [BASH_TOOL_RESPONSE_API, GET_REPO_KNOWLEDGE_TOOL_RESPONSE_API, GET_DEVELOPER_SKILL_TOOL_RESPONSE_API]
 
 
 def _format_error_message(error_text: str) -> dict:
@@ -127,7 +146,9 @@ def parse_toolcall_actions_response(
             error_msg += "Missing 'command' argument in bash tool call."
         elif name == "get_repo_knowledge" and (not isinstance(args, dict) or "query" not in args):
             error_msg += "Missing 'query' argument in get_repo_knowledge tool call."
-        elif name not in ["bash", "get_repo_knowledge"]:
+        elif name == "get_developer_skill" and (not isinstance(args, dict) or "developer" not in args):
+            error_msg += "Missing 'developer' argument in get_developer_skill tool call."
+        elif name not in ["bash", "get_repo_knowledge", "get_developer_skill"]:
             error_msg += f"Unknown tool '{name}'."
         if error_msg:
             error_text = Template(format_error_template, undefined=StrictUndefined).render(
@@ -136,7 +157,7 @@ def parse_toolcall_actions_response(
             raise FormatError(_format_error_message(error_text))
         if name == "bash":
             actions.append({"command": args["command"], "tool_call_id": tool_call.get("call_id") or tool_call.get("id")})
-        else:
+        elif name == "get_repo_knowledge":
             actions.append(
                 {
                     "tool": "get_repo_knowledge",
@@ -144,6 +165,14 @@ def parse_toolcall_actions_response(
                     "path": args.get("path", ""),
                     "max_results": args.get("max_results", 8),
                     "include_code": args.get("include_code", True),
+                    "tool_call_id": tool_call.get("call_id") or tool_call.get("id"),
+                }
+            )
+        else:
+            actions.append(
+                {
+                    "tool": "get_developer_skill",
+                    "developer": args["developer"],
                     "tool_call_id": tool_call.get("call_id") or tool_call.get("id"),
                 }
             )

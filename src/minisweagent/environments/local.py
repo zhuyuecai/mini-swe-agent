@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from minisweagent.exceptions import Submitted
+from minisweagent.tools.developer_skill import get_developer_skill_output
 from minisweagent.tools.repo_knowledge import get_repo_knowledge_output
 from minisweagent.utils.serialize import recursive_merge
 
@@ -27,6 +28,8 @@ class LocalEnvironment:
         cwd = cwd or self.config.cwd or os.getcwd()
         if action.get("tool") == "get_repo_knowledge":
             return get_repo_knowledge_output(cwd, action)
+        if action.get("tool") == "get_developer_skill":
+            return get_developer_skill_output(cwd, action)
         command = action.get("command", "")
         try:
             result = _run(command, cwd, os.environ | self.config.env, timeout or self.config.timeout)

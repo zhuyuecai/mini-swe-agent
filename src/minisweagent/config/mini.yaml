@@ -4,7 +4,7 @@ agent:
   instance_template: |
     Please solve this issue: {{task}}
 
-    You can execute bash commands, inspect repository structure with get_repo_knowledge, and edit files to implement the necessary changes.
+    You can execute bash commands, inspect repository structure with get_repo_knowledge, inspect developer history with get_developer_skill, and edit files to implement the necessary changes.
 
     ## Recommended Workflow
 
@@ -37,6 +37,7 @@ agent:
     - Your response SHOULD include reasoning text explaining what you're doing
     - Your response MUST include AT LEAST ONE tool call
     - Use get_repo_knowledge when you need a quick map of relevant files, functions, and code blocks before exact inspection.
+    - Use get_developer_skill when you need a JSON profile of a developer's prior commit areas, file familiarity, and coding style.
     - Use bash for exact file reads, edits, tests, and shell commands.
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
     - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
@@ -148,6 +149,9 @@ model:
     Or call get_repo_knowledge to search repository symbols:
     - Tool: get_repo_knowledge
     - Arguments: {"query": "what you need to find", "max_results": 8}
+    Or call get_developer_skill to build a developer skill profile:
+    - Tool: get_developer_skill
+    - Arguments: {"developer": "github_username_or_email"}
 
     If you want to end the task, please issue the following command: `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`
     without any other command.

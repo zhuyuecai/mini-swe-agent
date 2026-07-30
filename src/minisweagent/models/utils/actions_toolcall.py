@@ -57,7 +57,28 @@ GET_REPO_KNOWLEDGE_TOOL = {
     },
 }
 
-TOOLS = [BASH_TOOL, GET_REPO_KNOWLEDGE_TOOL]
+GET_DEVELOPER_SKILL_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_developer_skill",
+        "description": (
+            "Build a JSON skill profile for a developer from their previous git commits, changed files, "
+            "ownership areas, and coding style signals."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "developer": {
+                    "type": "string",
+                    "description": "Developer GitHub account name, git author name, or email address.",
+                }
+            },
+            "required": ["developer"],
+        },
+    },
+}
+
+TOOLS = [BASH_TOOL, GET_REPO_KNOWLEDGE_TOOL, GET_DEVELOPER_SKILL_TOOL]
 
 
 def parse_toolcall_actions(
@@ -96,7 +117,9 @@ def parse_toolcall_actions(
             error_msg += "Missing 'command' argument in bash tool call."
         elif name == "get_repo_knowledge" and (not isinstance(args, dict) or "query" not in args):
             error_msg += "Missing 'query' argument in get_repo_knowledge tool call."
-        elif name not in ["bash", "get_repo_knowledge"]:
+        elif name == "get_developer_skill" and (not isinstance(args, dict) or "developer" not in args):
+            error_msg += "Missing 'developer' argument in get_developer_skill tool call."
+        elif name not in ["bash", "get_repo_knowledge", "get_developer_skill"]:
             error_msg += f"Unknown tool '{name}'."
         if error_msg:
             raise FormatError(
@@ -110,7 +133,7 @@ def parse_toolcall_actions(
             )
         if name == "bash":
             actions.append({"command": args["command"], "tool_call_id": tool_call.id})
-        else:
+        elif name == "get_repo_knowledge":
             actions.append(
                 {
                     "tool": "get_repo_knowledge",
@@ -118,6 +141,14 @@ def parse_toolcall_actions(
                     "path": args.get("path", ""),
                     "max_results": args.get("max_results", 8),
                     "include_code": args.get("include_code", True),
+                    "tool_call_id": tool_call.id,
+                }
+            )
+        else:
+            actions.append(
+                {
+                    "tool": "get_developer_skill",
+                    "developer": args["developer"],
                     "tool_call_id": tool_call.id,
                 }
             )

@@ -30,6 +30,26 @@ def test_response_api_valid_get_repo_knowledge_tool_call():
     ]
 
 
+def test_response_api_valid_get_developer_skill_tool_call():
+    assert parse_toolcall_actions_response(
+        [
+            {
+                "type": "function_call",
+                "call_id": "call_dev",
+                "name": "get_developer_skill",
+                "arguments": '{"developer": "octocat"}',
+            }
+        ],
+        format_error_template="{{ error }}",
+    ) == [
+        {
+            "tool": "get_developer_skill",
+            "developer": "octocat",
+            "tool_call_id": "call_dev",
+        }
+    ]
+
+
 def test_response_api_missing_query_raises_format_error():
     with pytest.raises(FormatError) as exc_info:
         parse_toolcall_actions_response(
@@ -46,5 +66,21 @@ def test_response_api_missing_query_raises_format_error():
     assert "Missing 'query' argument" in exc_info.value.messages[0]["content"][0]["text"]
 
 
+def test_response_api_missing_developer_raises_format_error():
+    with pytest.raises(FormatError) as exc_info:
+        parse_toolcall_actions_response(
+            [
+                {
+                    "type": "function_call",
+                    "call_id": "call_dev",
+                    "name": "get_developer_skill",
+                    "arguments": "{}",
+                }
+            ],
+            format_error_template="{{ error }}",
+        )
+    assert "Missing 'developer' argument" in exc_info.value.messages[0]["content"][0]["text"]
+
+
 def test_response_api_tools_include_repo_knowledge():
-    assert [tool["name"] for tool in TOOLS_RESPONSE_API] == ["bash", "get_repo_knowledge"]
+    assert [tool["name"] for tool in TOOLS_RESPONSE_API] == ["bash", "get_repo_knowledge", "get_developer_skill"]

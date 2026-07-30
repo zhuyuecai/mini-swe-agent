@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from minisweagent.exceptions import Submitted
+from minisweagent.tools.developer_skill import get_developer_skill_command
 from minisweagent.tools.repo_knowledge import get_repo_knowledge_command
 from minisweagent.utils.serialize import recursive_merge
 
@@ -102,7 +103,13 @@ class DockerEnvironment:
     def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         """Execute a command in the Docker container and return the result as a dict."""
         is_repo_knowledge = action.get("tool") == "get_repo_knowledge"
-        command = get_repo_knowledge_command(action) if is_repo_knowledge else action.get("command", "")
+        is_developer_skill = action.get("tool") == "get_developer_skill"
+        if is_repo_knowledge:
+            command = get_repo_knowledge_command(action)
+        elif is_developer_skill:
+            command = get_developer_skill_command(action)
+        else:
+            command = action.get("command", "")
         cwd = cwd or self.config.cwd
         assert self.container_id, "Container not started"
 
@@ -127,6 +134,8 @@ class DockerEnvironment:
             output = {"output": result.stdout, "returncode": result.returncode, "exception_info": ""}
             if is_repo_knowledge:
                 output["extra"] = {"tool": "get_repo_knowledge"}
+            if is_developer_skill:
+                output["extra"] = {"tool": "get_developer_skill"}
         except Exception as e:
             raw_output = getattr(e, "output", None)
             raw_output = (
@@ -140,6 +149,7 @@ class DockerEnvironment:
                     "exception_type": type(e).__name__,
                     "exception": str(e),
                     **({"tool": "get_repo_knowledge"} if is_repo_knowledge else {}),
+                    **({"tool": "get_developer_skill"} if is_developer_skill else {}),
                 },
             }
         self._check_finished(output)

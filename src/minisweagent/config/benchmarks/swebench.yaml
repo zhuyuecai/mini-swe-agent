@@ -6,6 +6,12 @@ agent:
     Consider the following PR description:
     {{task}}
     </pr_description>
+    {%- if pr_author is defined and pr_author %}
+
+    <pr_author>
+    {{pr_author}}
+    </pr_author>
+    {%- endif %}
 
     <instructions>
     # Task Instructions
@@ -29,11 +35,21 @@ agent:
 
     ## Recommended Workflow
 
-    1. Analyze the codebase by finding and reading relevant files
-    2. Create a script to reproduce the issue
-    3. Edit the source code to resolve the issue
-    4. Verify your fix works by running your script again
-    5. Test edge cases to ensure your fix is robust
+    {%- if pr_author is defined and pr_author %}
+    1. FIRST, call get_developer_skill with {"developer": "{{pr_author}}"} before any bash or get_repo_knowledge tool call. Your first response MUST contain exactly one tool call, and that tool call MUST be get_developer_skill.
+    2. Read the returned developer skill profile and use it as the implementation style guide for the rest of the task.
+    3. Analyze the codebase by finding and reading relevant files.
+    4. Create a script to reproduce the issue.
+    5. Edit the source code to resolve the issue as if you are {{pr_author}}: prefer their familiar files, abstractions, testing style, naming, and change size when consistent with the task.
+    6. Verify your fix works by running your script again.
+    7. Test edge cases to ensure your fix is robust.
+    {%- else %}
+    1. Analyze the codebase by finding and reading relevant files.
+    2. Create a script to reproduce the issue.
+    3. Edit the source code to resolve the issue.
+    4. Verify your fix works by running your script again.
+    5. Test edge cases to ensure your fix is robust.
+    {%- endif %}
 
     ## Command Execution Rules
 
@@ -54,6 +70,11 @@ agent:
     - Your response SHOULD include reasoning text explaining what you're doing
     - Your response MUST include AT LEAST ONE tool call. You can make MULTIPLE tool calls in a single response when they are independent (e.g., searching repository knowledge while reading a specific file).
     - Use get_repo_knowledge when you need a quick map of relevant files, functions, and code blocks before exact inspection.
+    - Use get_developer_skill when you need a JSON profile of a developer's prior commit areas, file familiarity, and coding style.
+    {%- if pr_author is defined and pr_author %}
+    - Because this instance provides pr_author={{pr_author}}, your FIRST response MUST contain exactly one tool call: get_developer_skill with {"developer": "{{pr_author}}"}. Do not make any bash or get_repo_knowledge calls until after you receive the developer skill profile.
+    - After receiving the developer skill profile, solve the coding task as if you are {{pr_author}}. Match their observed file ownership, coding style, testing habits, and preferred change shape unless doing so would make the fix incorrect.
+    {%- endif %}
     - Use bash for exact file reads, edits, tests, and shell commands.
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
     - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
@@ -178,6 +199,9 @@ model:
     Or call get_repo_knowledge to search repository symbols:
     - Tool: get_repo_knowledge
     - Arguments: {"query": "what you need to find", "max_results": 8}
+    Or call get_developer_skill to build a developer skill profile:
+    - Tool: get_developer_skill
+    - Arguments: {"developer": "github_username_or_email"}
 
     If you have completed your assignment, please consult the first message about how to
     submit your solution (you will not be able to continue working on this task after that).

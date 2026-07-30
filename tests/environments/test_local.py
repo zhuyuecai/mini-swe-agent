@@ -2,6 +2,7 @@ import json
 import os
 import shlex
 import signal
+import subprocess
 import sys
 import tempfile
 import time
@@ -11,6 +12,7 @@ from unittest.mock import patch
 import pytest
 
 from minisweagent.environments.local import LocalEnvironment, LocalEnvironmentConfig
+from minisweagent.tools.developer_skill import get_developer_skill_command
 
 
 def test_local_environment_config_defaults():
@@ -51,6 +53,57 @@ def test_local_environment_get_repo_knowledge_tool():
         assert result["extra"]["tool"] == "get_repo_knowledge"
         assert payload["results"][0]["name"] == "parse_config"
         assert payload["results"][0]["file"] == "sample.py"
+
+
+def test_local_environment_get_developer_skill_tool():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        subprocess.run(["git", "init"], cwd=temp_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Octo Cat"], cwd=temp_dir, check=True)
+        subprocess.run(["git", "config", "user.email", "octocat@users.noreply.github.com"], cwd=temp_dir, check=True)
+        Path(temp_dir, "src").mkdir()
+        Path(temp_dir, "src", "feature.py").write_text(
+            "\n".join(
+                [
+                    "from pathlib import Path",
+                    "",
+                    "def load_value(path: Path) -> str:",
+                    "    return path.read_text().strip()",
+                ]
+            )
+        )
+        subprocess.run(["git", "add", "."], cwd=temp_dir, check=True)
+        subprocess.run(["git", "commit", "-m", "feat: add feature loader"], cwd=temp_dir, check=True, capture_output=True)
+
+        result = LocalEnvironment(cwd=temp_dir).execute({"tool": "get_developer_skill", "developer": "octocat"})
+        payload = json.loads(result["output"])
+        assert result["returncode"] == 0
+        assert result["extra"]["tool"] == "get_developer_skill"
+        assert payload["identity"]["github"] == "octocat"
+        assert payload["identity"]["commit_count"] == 1
+        assert payload["file_familiarity"]["frequently_changed_files"] == [
+            {"file": "src/feature.py", "commit_count": 1}
+        ]
+
+
+def test_get_developer_skill_command_executes_embedded_script():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        subprocess.run(["git", "init"], cwd=temp_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Octo Cat"], cwd=temp_dir, check=True)
+        subprocess.run(["git", "config", "user.email", "octocat@users.noreply.github.com"], cwd=temp_dir, check=True)
+        Path(temp_dir, "feature.py").write_text("def load_value() -> str:\n    return 'ok'\n")
+        subprocess.run(["git", "add", "."], cwd=temp_dir, check=True)
+        subprocess.run(["git", "commit", "-m", "feat: add feature"], cwd=temp_dir, check=True, capture_output=True)
+
+        result = subprocess.run(
+            get_developer_skill_command({"developer": "octocat"}),
+            cwd=temp_dir,
+            shell=True,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+    assert json.loads(result.stdout)["identity"]["github"] == "octocat"
 
 
 def test_local_environment_set_env_variables():
