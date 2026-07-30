@@ -6,6 +6,7 @@ import importlib
 from minisweagent import Agent, Environment, Model
 
 _AGENT_MAPPING = {
+    "author_profile": "minisweagent.agents.author_profile.AuthorProfileAgent",
     "default": "minisweagent.agents.default.DefaultAgent",
     "interactive": "minisweagent.agents.interactive.InteractiveAgent",
 }

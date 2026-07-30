@@ -6,6 +6,7 @@ from minisweagent.exceptions import FormatError
 from minisweagent.models.utils.actions_toolcall import (
     BASH_TOOL,
     GET_REPO_KNOWLEDGE_TOOL,
+    RECORD_DEVELOPER_SKILL_PROFILE_TOOL,
     TOOLS,
     format_toolcall_observation_messages,
     parse_toolcall_actions,
@@ -69,6 +70,19 @@ class TestParseToolcallActions:
             }
         ]
 
+    def test_valid_record_developer_skill_profile_tool_call(self):
+        tool_call = MagicMock()
+        tool_call.function.name = "record_developer_skill_profile"
+        tool_call.function.arguments = '{"profile": {"identity": {"query": "alice"}, "ownership": []}}'
+        tool_call.id = "call_profile"
+        assert parse_toolcall_actions([tool_call], format_error_template="{{ error }}") == [
+            {
+                "tool": "record_developer_skill_profile",
+                "profile": {"identity": {"query": "alice"}, "ownership": []},
+                "tool_call_id": "call_profile",
+            }
+        ]
+
     def test_multiple_valid_tool_calls(self):
         calls = []
         for i in range(3):
@@ -117,6 +131,15 @@ class TestParseToolcallActions:
         with pytest.raises(FormatError) as exc_info:
             parse_toolcall_actions([tool_call], format_error_template="{{ error }}")
         assert "Missing 'query' argument" in exc_info.value.messages[0]["content"]
+
+    def test_missing_profile_raises_format_error(self):
+        tool_call = MagicMock()
+        tool_call.function.name = "record_developer_skill_profile"
+        tool_call.function.arguments = '{"identity": {"query": "alice"}}'
+        tool_call.id = "call_1"
+        with pytest.raises(FormatError) as exc_info:
+            parse_toolcall_actions([tool_call], format_error_template="{{ error }}")
+        assert "Missing 'profile' argument" in exc_info.value.messages[0]["content"]
 
 
 class TestFormatToolcallObservationMessages:
@@ -176,6 +199,11 @@ class TestBashTool:
         assert "command" in BASH_TOOL["function"]["parameters"]["required"]
 
     def test_tools_include_repo_knowledge(self):
-        assert [tool["function"]["name"] for tool in TOOLS] == ["bash", "get_repo_knowledge"]
+        assert [tool["function"]["name"] for tool in TOOLS] == [
+            "bash",
+            "get_repo_knowledge",
+            "record_developer_skill_profile",
+        ]
         assert GET_REPO_KNOWLEDGE_TOOL["function"]["parameters"]["required"] == ["query"]
         assert "author" in GET_REPO_KNOWLEDGE_TOOL["function"]["parameters"]["properties"]
+        assert RECORD_DEVELOPER_SKILL_PROFILE_TOOL["function"]["parameters"]["required"] == ["profile"]

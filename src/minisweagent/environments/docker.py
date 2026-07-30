@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import platform
@@ -101,6 +102,13 @@ class DockerEnvironment:
 
     def execute(self, action: dict, cwd: str = "", *, timeout: int | None = None) -> dict[str, Any]:
         """Execute a command in the Docker container and return the result as a dict."""
+        if action.get("tool") == "record_developer_skill_profile":
+            return {
+                "output": json.dumps({"recorded": True, "profile": action["profile"]}, indent=2),
+                "returncode": 0,
+                "exception_info": "",
+                "extra": {"tool": "record_developer_skill_profile", "developer_skill_profile": action["profile"]},
+            }
         is_repo_knowledge = action.get("tool") == "get_repo_knowledge"
         command = get_repo_knowledge_command(action) if is_repo_knowledge else action.get("command", "")
         cwd = cwd or self.config.cwd

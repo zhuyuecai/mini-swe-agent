@@ -141,14 +141,16 @@ def test_process_instance_passes_pr_author_to_agent(tmp_path):
     with (
         patch("minisweagent.run.benchmarks.swebench.get_model") as mock_get_model,
         patch("minisweagent.run.benchmarks.swebench.get_sb_environment", return_value=object()),
-        patch("minisweagent.run.benchmarks.swebench.ProgressTrackingAgent") as mock_agent_class,
+        patch("minisweagent.run.benchmarks.swebench.get_progress_tracking_agent_class") as mock_agent_class_factory,
     ):
         mock_get_model.return_value.config.model_name = "model"
+        mock_agent_class = mock_agent_class_factory.return_value
         mock_agent = mock_agent_class.return_value
         mock_agent.run.return_value = {"exit_status": "ok", "submission": "patch"}
 
         process_instance(instance, tmp_path, {"agent": {}}, progress_manager)
 
+    mock_agent_class_factory.assert_called_once_with("")
     mock_agent.run.assert_called_once_with("fix the bug", **instance)
 
 

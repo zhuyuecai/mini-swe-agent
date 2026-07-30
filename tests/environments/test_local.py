@@ -80,6 +80,19 @@ def test_local_environment_get_repo_knowledge_author_tool():
         assert payload["author_context"]["touched_files"][0]["file"] == "sample.py"
 
 
+def test_local_environment_record_developer_skill_profile_tool():
+    result = LocalEnvironment().execute(
+        {
+            "tool": "record_developer_skill_profile",
+            "profile": {"identity": {"query": "alice"}, "ownership": []},
+        }
+    )
+    assert result["returncode"] == 0
+    assert json.loads(result["output"])["profile"]["identity"]["query"] == "alice"
+    assert result["extra"]["tool"] == "record_developer_skill_profile"
+    assert result["extra"]["developer_skill_profile"]["ownership"] == []
+
+
 def test_local_environment_set_env_variables():
     """Test setting environment variables in the local environment."""
     env = LocalEnvironment(env={"TEST_VAR": "test_value", "ANOTHER_VAR": "another_value"})

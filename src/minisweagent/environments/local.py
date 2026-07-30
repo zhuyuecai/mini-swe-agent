@@ -1,3 +1,4 @@
+import json
 import os
 import platform
 import signal
@@ -27,6 +28,13 @@ class LocalEnvironment:
         cwd = cwd or self.config.cwd or os.getcwd()
         if action.get("tool") == "get_repo_knowledge":
             return get_repo_knowledge_output(cwd, action)
+        if action.get("tool") == "record_developer_skill_profile":
+            return {
+                "output": json.dumps({"recorded": True, "profile": action["profile"]}, indent=2),
+                "returncode": 0,
+                "exception_info": "",
+                "extra": {"tool": "record_developer_skill_profile", "developer_skill_profile": action["profile"]},
+            }
         command = action.get("command", "")
         try:
             result = _run(command, cwd, os.environ | self.config.env, timeout or self.config.timeout)

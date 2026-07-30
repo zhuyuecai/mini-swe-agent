@@ -1,6 +1,7 @@
 import pytest
 
 from minisweagent.agents import get_agent, get_agent_class
+from minisweagent.agents.author_profile import AuthorProfileAgent
 from minisweagent.agents.default import DefaultAgent
 from minisweagent.agents.interactive import InteractiveAgent
 from minisweagent.environments.local import LocalEnvironment
@@ -12,6 +13,7 @@ class TestGetAgentClass:
         ("spec", "expected"),
         [
             ("minisweagent.agents.default.DefaultAgent", DefaultAgent),
+            ("minisweagent.agents.author_profile.AuthorProfileAgent", AuthorProfileAgent),
             ("minisweagent.agents.interactive.InteractiveAgent", InteractiveAgent),
         ],
     )
@@ -22,6 +24,7 @@ class TestGetAgentClass:
         ("spec", "expected"),
         [
             ("default", DefaultAgent),
+            ("author_profile", AuthorProfileAgent),
             ("interactive", InteractiveAgent),
         ],
     )

@@ -69,7 +69,25 @@ GET_REPO_KNOWLEDGE_TOOL = {
     },
 }
 
-TOOLS = [BASH_TOOL, GET_REPO_KNOWLEDGE_TOOL]
+RECORD_DEVELOPER_SKILL_PROFILE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "record_developer_skill_profile",
+        "description": "Record the developer skill profile inferred from author_context before solving.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "profile": {
+                    "type": "object",
+                    "description": "JSON-shaped developer skill profile inferred from repository author context.",
+                }
+            },
+            "required": ["profile"],
+        },
+    },
+}
+
+TOOLS = [BASH_TOOL, GET_REPO_KNOWLEDGE_TOOL, RECORD_DEVELOPER_SKILL_PROFILE_TOOL]
 
 
 def parse_toolcall_actions(
@@ -108,7 +126,12 @@ def parse_toolcall_actions(
             error_msg += "Missing 'command' argument in bash tool call."
         elif name == "get_repo_knowledge" and (not isinstance(args, dict) or "query" not in args):
             error_msg += "Missing 'query' argument in get_repo_knowledge tool call."
-        elif name not in ["bash", "get_repo_knowledge"]:
+        elif (
+            name == "record_developer_skill_profile"
+            and (not isinstance(args, dict) or not isinstance(args.get("profile"), dict))
+        ):
+            error_msg += "Missing 'profile' argument in record_developer_skill_profile tool call."
+        elif name not in ["bash", "get_repo_knowledge", "record_developer_skill_profile"]:
             error_msg += f"Unknown tool '{name}'."
         if error_msg:
             raise FormatError(
@@ -122,7 +145,7 @@ def parse_toolcall_actions(
             )
         if name == "bash":
             actions.append({"command": args["command"], "tool_call_id": tool_call.id})
-        else:
+        elif name == "get_repo_knowledge":
             actions.append(
                 {
                     "tool": "get_repo_knowledge",
@@ -133,6 +156,14 @@ def parse_toolcall_actions(
                     "author": args.get("author", ""),
                     "recent_contributions": args.get("recent_contributions", 5),
                     "include_author_content": args.get("include_author_content", True),
+                    "tool_call_id": tool_call.id,
+                }
+            )
+        else:
+            actions.append(
+                {
+                    "tool": "record_developer_skill_profile",
+                    "profile": args["profile"],
                     "tool_call_id": tool_call.id,
                 }
             )
