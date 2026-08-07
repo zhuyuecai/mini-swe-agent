@@ -77,6 +77,7 @@ def test_local_environment_get_repo_knowledge_author_tool():
         )
         payload = json.loads(result["output"])
         assert result["returncode"] == 0
+        assert payload["author_files"][0]["file"] == "sample.py"
         assert payload["author_context"]["touched_files"][0]["file"] == "sample.py"
 
 

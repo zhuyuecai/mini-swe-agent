@@ -40,6 +40,7 @@ def test_get_repo_knowledge_includes_author_context(tmp_path):
     assert result["author_context"]["touched_files"] == [
         {"file": "owned.py", "commits": [result["author_context"]["recent_commits"][0]["short_commit"]], "exists": True}
     ]
+    assert result["author_files"] == result["author_context"]["touched_files"]
     assert result["author_context"]["content"][0]["file"] == "owned.py"
     assert result["results"][0]["file"] == "owned.py"
 
@@ -50,6 +51,7 @@ def test_get_repo_knowledge_without_author_keeps_original_shape(tmp_path):
     result = get_repo_knowledge(tmp_path, query="parse config")
 
     assert "author" not in result
+    assert "author_files" not in result
     assert "author_context" not in result
     assert result["results"][0]["name"] == "parse_config"
 
@@ -62,6 +64,7 @@ def test_get_repo_knowledge_author_without_matches_is_empty(tmp_path):
     result = get_repo_knowledge(tmp_path, query="parse config", author="nobody@example.com")
 
     assert result["results"][0]["name"] == "parse_config"
+    assert result["author_files"] == []
     assert result["author_context"] == {"recent_contributions": 0, "recent_commits": [], "touched_files": [], "content": []}
 
 

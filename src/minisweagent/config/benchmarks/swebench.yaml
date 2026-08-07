@@ -60,7 +60,7 @@ agent:
     - Your response SHOULD include reasoning text explaining what you're doing
     - Your response MUST include AT LEAST ONE tool call. You can make MULTIPLE tool calls in a single response when they are independent (e.g., searching repository knowledge while reading a specific file).
     - Use get_repo_knowledge when you need a quick map of relevant files, functions, and code blocks before exact inspection.
-    - Pass pr_author as the author to get_repo_knowledge when the instance provides it and author-specific recent git history can reveal useful context.
+    - If this instance provides pr_author, every get_repo_knowledge function call MUST include the author argument set to that exact pr_author value.
     - Use bash for exact file reads, edits, tests, and shell commands.
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
     - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
@@ -69,7 +69,11 @@ agent:
     <example_response>
     I need to understand the Builder-related code. Let me find relevant files and check the project structure.
 
-    [Makes multiple bash tool calls: {"command": "ls -la"}, {"command": "find src -name '*.java' | grep -i builder"}, {"command": "cat README.md | head -50"}]
+    {% if pr_author is defined and pr_author %}
+    [Makes multiple tool calls: {"tool": "get_repo_knowledge", "query": "Builder implementation", "author": "{{pr_author}}", "max_results": 8}, {"command": "ls -la"}, {"command": "find src -name '*.java' | grep -i builder"}]
+    {% else %}
+    [Makes multiple tool calls: {"tool": "get_repo_knowledge", "query": "Builder implementation", "max_results": 8}, {"command": "ls -la"}, {"command": "find src -name '*.java' | grep -i builder"}]
+    {% endif %}
     </example_response>
 
     ## Environment Details
@@ -188,7 +192,11 @@ model:
     - Arguments: {"command": "your_command_here"}
     Or call get_repo_knowledge to search repository symbols:
     - Tool: get_repo_knowledge
+    {% if pr_author is defined and pr_author %}
+    - Arguments: {"query": "what you need to find", "author": "{{pr_author}}", "max_results": 8}
+    {% else %}
     - Arguments: {"query": "what you need to find", "max_results": 8}
+    {% endif %}
 
     If you have completed your assignment, please consult the first message about how to
     submit your solution (you will not be able to continue working on this task after that).

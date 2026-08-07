@@ -83,9 +83,10 @@ def get_repo_knowledge(
         include_author_content=include_author_content,
         include_code=include_code,
     )
-    author_files = {file["file"] for file in author_context.get("touched_files", [])}
+    author_files = author_context.get("touched_files", [])
+    author_file_names = {file["file"] for file in author_files}
     scored_nodes = sorted(
-        ((node, _score(node, query) + (4 if node.file in author_files else 0)) for node in nodes),
+        ((node, _score(node, query) + (4 if node.file in author_file_names else 0)) for node in nodes),
         key=lambda item: (-item[1], item[0].file, item[0].start_line),
     )
     results = [node.to_result(score=score, include_code=include_code) for node, score in scored_nodes[:max_results]]
@@ -104,6 +105,7 @@ def get_repo_knowledge(
     }
     if author:
         output["author"] = author
+        output["author_files"] = author_files
         output["author_context"] = author_context
     return output
 
@@ -567,9 +569,10 @@ for file in iter_python_files(search_root):
     nodes.extend(file_nodes)
     relations.extend(relations_from_nodes(file_nodes))
 context = author_context(root, search_root, action)
-author_files = {file["file"] for file in context.get("touched_files", [])}
+author_files = context.get("touched_files", [])
+author_file_names = {file["file"] for file in author_files}
 scored = sorted(
-    ((node, score(node, action["query"]) + (4 if node["file"] in author_files else 0)) for node in nodes),
+    ((node, score(node, action["query"]) + (4 if node["file"] in author_file_names else 0)) for node in nodes),
     key=lambda item: (-item[1], item[0]["file"], item[0]["start_line"]),
 )
 results = []
@@ -591,6 +594,7 @@ payload = {
 }
 if action.get("author"):
     payload["author"] = action["author"]
+    payload["author_files"] = author_files
     payload["author_context"] = context
 print(json.dumps(payload, indent=2))
 '''
