@@ -14,6 +14,7 @@ subcommands = [
     ("minisweagent.run.utilities.config", ["config"], "Manage the global config file"),
     ("minisweagent.run.utilities.inspector", ["inspect", "i", "inspector"], "Run inspector (browse trajectories)"),
     ("minisweagent.run.utilities.author_enrich", ["author-enrich"], "Add PR author metadata to SWE-bench datasets"),
+    ("minisweagent.run.utilities.get_tokens", ["get-tokens"], "Sum total_tokens in SWE-bench run trajectories"),
     ("minisweagent.run.benchmarks.swebench", ["swebench"], "Evaluate on SWE-bench (batch mode)"),
     ("minisweagent.run.benchmarks.swebench_single", ["swebench-single"], "Evaluate on SWE-bench (single instance)"),
     ("minisweagent.run.benchmarks.programbench", ["programbench"], "Run on ProgramBench (batch mode)"),
