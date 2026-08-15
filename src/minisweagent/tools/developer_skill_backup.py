@@ -26,9 +26,6 @@ def get_developer_skill(root, *, developer):
     directories = Counter(_ownership_path(file) for file in file_counts)
     style = _style_from_files(root_path, [file for file, _ in file_counts.most_common(25)])
     testing = _testing_style(root_path, file_counts)
-    technical_strengths = _technical_strengths(extensions, directories, testing)
-    change_style = _change_style(commits)
-    caveats = _caveats(developer, commits)
     return {
         "identity": {
             "query": developer,
@@ -42,14 +39,12 @@ def get_developer_skill(root, *, developer):
             {
                 "path": path,
                 "commit_count": count,
+                "confidence": _confidence(count, len(commits)),
                 "evidence": f"Changed in {count} of {len(commits)} matched commits",
             }
             for path, count in directories.most_common(8)
         ],
-        "expertise": {
-            "expertise_area": _expertise_area(extensions, directories, testing, technical_strengths),
-            "expertise_style": _expertise_style(commits, testing, file_counts, change_style, caveats),
-        },
+        "technical_strengths": _technical_strengths(extensions, directories, testing),
         "style": style,
         "testing": testing,
         "file_familiarity": {
@@ -58,9 +53,25 @@ def get_developer_skill(root, *, developer):
             ],
             "frequently_touched_symbols": _symbols_from_files(root_path, [file for file, _ in file_counts.most_common(10)]),
         },
-        "mimicry_guidance": _mimicry_guidance(
-            style, testing, directories, extensions, change_style, technical_strengths, caveats
-        ),
+        "change_style": {
+            "typical_patch_size": _patch_size(commits),
+            "average_files_per_commit": round(sum(len(commit.files) for commit in commits) / len(commits), 2)
+            if commits
+            else 0,
+            "average_insertions_per_commit": round(sum(commit.insertions for commit in commits) / len(commits), 2)
+            if commits
+            else 0,
+            "average_deletions_per_commit": round(sum(commit.deletions for commit in commits) / len(commits), 2)
+            if commits
+            else 0,
+            "common_commit_words": [word for word, _ in _commit_words(commits).most_common(12)],
+        },
+        "mimicry_guidance": _mimicry_guidance(style, testing, directories, extensions),
+        "confidence": {
+            "overall": _overall_confidence(len(commits)),
+            "strong_evidence": _strong_evidence(len(commits), directories, file_counts),
+            "caveats": _caveats(developer, commits),
+        },
     }
 
 
@@ -207,58 +218,6 @@ def _technical_strengths(extensions, directories, testing):
     return strengths
 
 
-def _expertise_area(extensions, directories, testing, technical_strengths):
-    labels = []
-    paths = " ".join(path for path, _ in directories.most_common())
-    strength_areas = {item["area"] for item in technical_strengths}
-    if any(part in paths for part in ["frontend", "templates", "static", "js", "css", "html"]):
-        labels.append("frontend")
-    if any(part in paths for part in ["api", "views", "routing", "urls", "http", "sessions", "auth"]):
-        labels.append("backend")
-    if any(part in paths for part in ["db", "models", "migrations", "sql", "query", "database"]):
-        labels.append("database")
-    if any(part in paths for part in ["test", "testing", "tests"]) or testing["test_files_changed"]:
-        labels.append("testing")
-    if any(part in paths for part in ["doc", "docs", "documentation"]):
-        labels.append("documentation")
-    if any(part in paths for part in ["build", "ci", "tox", "setup", "config", "requirements"]):
-        labels.append("build_systems")
-    if any(part in paths for part in ["security", "crypto", "auth", "password"]):
-        labels.append("security")
-    if any(part in paths for part in ["performance", "benchmark", "cache", "caching"]):
-        labels.append("performance")
-    if any(part in paths for part in ["array", "stats", "linear_model", "cluster", "datasets", "metrics", "polys", "solvers"]):
-        labels.append("numerics_scientific_computing")
-    if ".py" in extensions or ".py" in strength_areas:
-        labels.append("backend")
-    return _unique(labels) or ["maintenance"]
-
-
-def _expertise_style(commits, testing, file_counts, change_style, caveats):
-    labels = []
-    words = _commit_words(commits)
-    subjects = " ".join(commit.subject.lower() for commit in commits)
-    if any(word in words for word in ["fix", "bug", "bugfix", "regression", "error", "exception", "crash"]):
-        labels.extend(["bug_diagnosis", "regression_fixing"])
-    if any(word in words for word in ["add", "feature", "implement", "support", "allow"]):
-        labels.append("feature_development")
-    if any(word in words for word in ["refactor", "cleanup", "clean", "simplify"]):
-        labels.extend(["large_refactoring", "code_cleanup"])
-    if any(word in words for word in ["compat", "compatibility", "deprecate", "deprecated"]):
-        labels.append("compatibility_fixing")
-    if any(word in words for word in ["speed", "fast", "performance", "optimize", "cache"]):
-        labels.append("performance_tuning")
-    if testing["test_files_changed"] or "test" in subjects or any(_is_test_file(file) for file in file_counts):
-        labels.append("test_authoring")
-    if any(file.lower().endswith((".md", ".rst", ".txt")) or "doc" in Path(file).parts for file in file_counts):
-        labels.append("documentation_improvement")
-    if change_style["typical_patch_size"] == "large":
-        labels.append("large_refactoring")
-    if caveats and not commits:
-        labels.append("maintenance")
-    return _unique(labels) or ["maintenance"]
-
-
 def _symbols_from_files(root, files):
     symbols = []
     for file in files:
@@ -279,22 +238,6 @@ def _patch_size(commits):
     return "large"
 
 
-def _change_style(commits):
-    return {
-        "typical_patch_size": _patch_size(commits),
-        "average_files_per_commit": round(sum(len(commit.files) for commit in commits) / len(commits), 2)
-        if commits
-        else 0,
-        "average_insertions_per_commit": round(sum(commit.insertions for commit in commits) / len(commits), 2)
-        if commits
-        else 0,
-        "average_deletions_per_commit": round(sum(commit.deletions for commit in commits) / len(commits), 2)
-        if commits
-        else 0,
-        "common_commit_words": [word for word, _ in _commit_words(commits).most_common(12)],
-    }
-
-
 def _commit_words(commits):
     stop = {"a", "an", "and", "for", "in", "of", "the", "to", "with"}
     return Counter(
@@ -305,23 +248,42 @@ def _commit_words(commits):
     )
 
 
-def _mimicry_guidance(style, testing, directories, extensions, change_style, technical_strengths, caveats):
+def _mimicry_guidance(style, testing, directories, extensions):
     prefer = [f"Start in familiar areas: {', '.join(path for path, _ in directories.most_common(3))}"] if directories else []
     if extensions:
         prefer.append(f"Match common file types: {', '.join(extension for extension, _ in extensions.most_common(3))}")
     if testing["patterns"]:
         prefer.append(f"Follow observed test patterns: {', '.join(testing['patterns'])}")
-    if technical_strengths:
-        prefer.append(f"Lean on observed strengths: {', '.join(item['area'] for item in technical_strengths[:3])}")
-    prefer.append(f"Prefer {change_style['typical_patch_size']} patches when possible.")
-    avoid = ["Adding broad abstractions without matching evidence in changed files."]
-    if caveats:
-        avoid.append("Overfitting to weak developer-history evidence.")
     return {
         "prefer": prefer + [style["typing"], style["error_handling"]],
-        "avoid": avoid,
+        "avoid": ["Adding broad abstractions without matching evidence in changed files."],
         "match": [style["naming"], style["comments"], style["dependencies"]],
     }
+
+
+def _confidence(count, total):
+    if total and count / total >= 0.4:
+        return "high"
+    if count >= 3:
+        return "medium"
+    return "low"
+
+
+def _overall_confidence(commit_count):
+    if commit_count >= 20:
+        return "high"
+    if commit_count >= 5:
+        return "medium"
+    return "low"
+
+
+def _strong_evidence(commit_count, directories, file_counts):
+    evidence = [f"{commit_count} matched commits"] if commit_count else []
+    if directories:
+        evidence.append(f"Top ownership path: {directories.most_common(1)[0][0]}")
+    if file_counts:
+        evidence.append(f"Top changed file: {file_counts.most_common(1)[0][0]}")
+    return evidence
 
 
 def _caveats(developer, commits):
@@ -340,14 +302,6 @@ def _dependency_style(text):
     if "import os" in text:
         return "Uses standard-library OS helpers."
     return "No strong dependency preference observed."
-
-
-def _unique(items):
-    result = []
-    for item in items:
-        if item not in result:
-            result.append(item)
-    return result
 
 
 def _is_test_file(file):

@@ -199,6 +199,29 @@ def test_filter_instances_regex_filter():
     assert result == expected
 
 
+def test_filter_instances_csv_test_case_filter(tmp_path):
+    instances = [
+        {"instance_id": "django__test1"},
+        {"instance_id": "flask__test2"},
+        {"instance_id": "django__test3"},
+    ]
+    filter_file = tmp_path / "test-cases.csv"
+    filter_file.write_text("test_case\ndjango__test3\nflask__test2\n")
+
+    assert filter_instances(instances, filter_spec=str(filter_file), slice_spec="") == [
+        {"instance_id": "flask__test2"},
+        {"instance_id": "django__test3"},
+    ]
+
+
+def test_filter_instances_csv_instance_id_filter(tmp_path):
+    instances = [{"instance_id": "repo__1"}, {"instance_id": "repo__2"}]
+    filter_file = tmp_path / "instances.csv"
+    filter_file.write_text("instance_id\nrepo__2\n")
+
+    assert filter_instances(instances, filter_spec=str(filter_file), slice_spec="") == [{"instance_id": "repo__2"}]
+
+
 def test_filter_instances_slice_only():
     """Test filter_instances with slice specification"""
     instances = [{"instance_id": f"repo{i}__test{i}"} for i in range(10)]

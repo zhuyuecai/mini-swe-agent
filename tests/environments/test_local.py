@@ -80,6 +80,14 @@ def test_local_environment_get_developer_skill_tool():
         assert result["extra"]["tool"] == "get_developer_skill"
         assert payload["identity"]["github"] == "octocat"
         assert payload["identity"]["commit_count"] == 1
+        assert "confidence" not in payload
+        assert "change_style" not in payload
+        assert "caveats" not in payload
+        assert "technical_strengths" not in payload
+        assert "confidence" not in payload["ownership"][0]
+        assert payload["expertise"]["expertise_area"] == ["backend"]
+        assert payload["expertise"]["expertise_style"] == ["feature_development"]
+        assert payload["mimicry_guidance"]["prefer"]
         assert payload["file_familiarity"]["frequently_changed_files"] == [
             {"file": "src/feature.py", "commit_count": 1}
         ]
@@ -103,7 +111,13 @@ def test_get_developer_skill_command_executes_embedded_script():
             capture_output=True,
         )
 
-    assert json.loads(result.stdout)["identity"]["github"] == "octocat"
+    payload = json.loads(result.stdout)
+    assert payload["identity"]["github"] == "octocat"
+    assert "confidence" not in payload
+    assert "change_style" not in payload
+    assert "caveats" not in payload
+    assert "technical_strengths" not in payload
+    assert payload["expertise"]["expertise_area"] == ["backend"]
 
 
 def test_local_environment_set_env_variables():

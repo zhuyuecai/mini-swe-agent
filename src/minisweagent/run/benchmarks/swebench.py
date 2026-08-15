@@ -4,10 +4,12 @@
 # Read this first: https://mini-swe-agent.com/latest/usage/swebench/  (usage docs)
 
 import concurrent.futures
+import csv
 import json
 import random
 import re
 import threading
+from io import StringIO
 import time
 import traceback
 from pathlib import Path
@@ -186,7 +188,11 @@ def filter_instances(
         random.seed(42)
         random.shuffle(instances)
     before_filter = len(instances)
-    instances = [instance for instance in instances if re.match(filter_spec, instance["instance_id"])]
+    if filter_spec and (filter_file := Path(filter_spec)).is_file():
+        instance_ids = _load_filter_ids(filter_file)
+        instances = [instance for instance in instances if instance["instance_id"] in instance_ids]
+    else:
+        instances = [instance for instance in instances if re.match(filter_spec, instance["instance_id"])]
     if (after_filter := len(instances)) != before_filter:
         logger.info(f"Instance filter: {before_filter} -> {after_filter} instances")
     if slice_spec:
@@ -195,6 +201,17 @@ def filter_instances(
         if (after_slice := len(instances)) != before_filter:
             logger.info(f"Instance slice: {before_filter} -> {after_slice} instances")
     return instances
+
+
+def _load_filter_ids(path: Path) -> set[str]:
+    rows = list(csv.DictReader(StringIO(path.read_text())))
+    if not rows:
+        return set()
+    field = next((name for name in ["instance_id", "test_case"] if name in rows[0]), None)
+    if field is None:
+        msg = f"CSV filter {path} must contain an 'instance_id' or 'test_case' column"
+        raise ValueError(msg)
+    return {row[field].strip() for row in rows if row.get(field, "").strip()}
 
 
 def load_swebench_instances(subset: str, split: str, *, author_enriched: bool = False) -> list[dict]:
@@ -220,7 +237,7 @@ def main(
     subset: str = typer.Option("lite", "--subset", help="SWEBench subset to use or path to a dataset", rich_help_panel="Data selection"),
     split: str = typer.Option("dev", "--split", help="Dataset split", rich_help_panel="Data selection"),
     slice_spec: str = typer.Option("", "--slice", help="Slice specification (e.g., '0:5' for first 5 instances)", rich_help_panel="Data selection"),
-    filter_spec: str = typer.Option("", "--filter", help="Filter instance IDs by regex", rich_help_panel="Data selection"),
+    filter_spec: str = typer.Option("", "--filter", help="Filter instance IDs by regex or CSV file with an instance_id/test_case column", rich_help_panel="Data selection"),
     shuffle: bool = typer.Option(False, "--shuffle", help="Shuffle instances", rich_help_panel="Data selection"),
     author_enriched: bool = typer.Option(False, "--author-enriched", help="Load the dataset saved by mini-extra author-enrich", rich_help_panel="Data selection"),
     output: str = typer.Option("", "-o", "--output", help="Output directory", rich_help_panel="Basic"),

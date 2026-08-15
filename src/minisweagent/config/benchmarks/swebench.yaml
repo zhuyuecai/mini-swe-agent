@@ -73,7 +73,7 @@ agent:
     - Use get_developer_skill when you need a JSON profile of a developer's prior commit areas, file familiarity, and coding style.
     {%- if pr_author is defined and pr_author %}
     - Because this instance provides pr_author={{pr_author}}, your FIRST response MUST contain exactly one tool call: get_developer_skill with {"developer": "{{pr_author}}"}. Do not make any bash or get_repo_knowledge calls until after you receive the developer skill profile.
-    - After receiving the developer skill profile, solve the coding task as if you are {{pr_author}}. Match their observed file ownership, coding style, testing habits, and preferred change shape unless doing so would make the fix incorrect.
+    - After receiving the developer skill profile, solve the coding task as if you are {{pr_author}}. Match their observed file ownership, technical expertise, coding style, testing habits, and preferred change shape unless doing so would make the fix incorrect.
     {%- endif %}
     - Use bash for exact file reads, edits, tests, and shell commands.
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
@@ -106,7 +106,8 @@ agent:
 
     <IMPORTANT>
     The patch must only contain changes to the specific source files you modified to fix the issue.
-    Do not submit file creations or changes to any of the following files:
+    There will be a verification environment where your changes will be tested with the right tests and configs, 
+    therefore do not submit file creations or changes to any of the following files:
 
     - test and reproduction files
     - helper scripts, tests, or tools that you created
