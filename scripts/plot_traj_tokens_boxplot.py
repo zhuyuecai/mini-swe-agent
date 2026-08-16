@@ -25,6 +25,12 @@ def trajectory_token_sums(folder):
         raise ValueError(f"No *.traj.json files found in {folder}")
     return [total_tokens_in_value(json.loads(path.read_text())) for path in traj_files]
 
+def get_labels_from_foldername(folder_name):
+    if "vanilla" in folder_name:
+        return "Vanilla"
+    if "pkg" in folder_name:
+        return "PKG"
+    return "Developer Profile"
 
 def plot_boxplot(token_sums, labels, output):
     os.environ.setdefault("MPLCONFIGDIR", tempfile.mkdtemp(prefix="matplotlib-"))
@@ -71,7 +77,7 @@ def main():
             raise ValueError(f"Not a directory: {folder}")
         sums = trajectory_token_sums(folder)
         token_sums.append(sums)
-        labels.append(folder.name)
+        labels.append(get_labels_from_foldername(folder.name))
         print(
             f"{folder}: {len(sums)} trajectories, total={sum(sums)}, "
             f"median={statistics.median(sums)}, min={min(sums)}, max={max(sums)}"
