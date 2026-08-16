@@ -50,7 +50,7 @@ def plot_boxplot(token_sums, labels, output):
         ax.boxplot(token_sums, tick_labels=labels, showmeans=True)
     except TypeError:
         ax.boxplot(token_sums, labels=labels, showmeans=True)
-    ax.set_title("Total Tokens per Trajectory")
+    ax.set_title("Total Tokens per Experiment")
     ax.set_ylabel("Sum of total_tokens")
     ax.tick_params(axis="x", rotation=30)
     ax.grid(axis="y", alpha=0.3)
