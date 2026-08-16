@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import statistics
 import tempfile
 from pathlib import Path
 
@@ -71,7 +72,10 @@ def main():
         sums = trajectory_token_sums(folder)
         token_sums.append(sums)
         labels.append(folder.name)
-        print(f"{folder}: {len(sums)} trajectories, total={sum(sums)}, min={min(sums)}, max={max(sums)}")
+        print(
+            f"{folder}: {len(sums)} trajectories, total={sum(sums)}, "
+            f"median={statistics.median(sums)}, min={min(sums)}, max={max(sums)}"
+        )
     plot_boxplot(token_sums, labels, args.output)
     print(f"Saved box plot to {args.output}")
 
